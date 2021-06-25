@@ -98,6 +98,7 @@ class map : mapper =
       | Return_statement e -> Return_statement (m#expression_o e)
       | Labelled_statement (l, (s, loc)) -> Labelled_statement (l, (m#statement s, loc))
       | Throw_statement e -> Throw_statement (m#expression e)
+      | Suspended_statement thunk -> Suspended_statement thunk
       | Switch_statement (e, l, def, l') ->
           Switch_statement
             ( m#expression e
@@ -181,6 +182,15 @@ class map : mapper =
 
     method program x = m#sources x
   end
+
+class unsuspend = object(self)
+  inherit map as super
+
+  method statement = function
+    | Suspended_statement thunk ->
+      self#statement (thunk ())
+    | s -> super#statement s
+end
 
 (* var substitution *)
 class subst sub =

@@ -52,6 +52,8 @@ class type mapper =
 
 class map : mapper
 
+class unsuspend : mapper
+
 class subst :
   (ident -> ident)
   -> object

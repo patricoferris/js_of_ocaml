@@ -169,6 +169,10 @@ type t =
   | RERAISE
   | RAISE_NOTRACE
   | GETSTRINGCHAR
+  | PERFORM
+  | RESUME
+  | RESUMETERM
+  | DELEGATETERM
   | FIRST_UNIMPLEMENTED_OP
 
 type kind =
@@ -185,6 +189,7 @@ type kind =
   | KUnaryCall
   | KBinaryCall
   | KStop of int
+  | KContextSwitch of int
   | K_will_not_happen
 
 type desc =
@@ -350,6 +355,10 @@ let ops =
      ; RERAISE, KStop 0, "RERAISE"
      ; RAISE_NOTRACE, KStop 0, "RAISE_NOTRACE"
      ; GETSTRINGCHAR, if_v407 KNullary, "GETSTRINGCHAR"
+     ; PERFORM, KContextSwitch 0, "PERFORM"
+     ; RESUME, KContextSwitch 0, "RESUME"
+     ; RESUMETERM, KStop 1, "RESUMETERM"
+     ; DELEGATETERM, KStop 1, "DELEGATETERM"
      ; FIRST_UNIMPLEMENTED_OP, K_will_not_happen, "FIRST_UNIMPLEMENTED_OP"
     |]
   in

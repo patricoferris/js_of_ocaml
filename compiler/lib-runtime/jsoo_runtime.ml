@@ -44,6 +44,7 @@ let runtime =
     ; marshal
     ; md5
     ; mlBytes
+    ; memory
     ; nat
     ; obj
     ; parsing

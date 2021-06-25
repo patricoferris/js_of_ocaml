@@ -92,8 +92,10 @@ let rec loop max name round i (p : 'a) : 'a =
 
 let identity x = x
 
-(* o1 *)
+let o0 : 'a -> 'a = print
 
+(* o1 *)
+(* Effects: TODO, TAIL CALL BROKEN  *)
 let o1 : 'a -> 'a =
   print
   +> tailcall
@@ -432,7 +434,7 @@ type profile = Code.program -> Code.program
 let f
     ?(standalone = true)
     ?(global = `Auto)
-    ?(profile = o1)
+    ?(profile = o0)
     ?(dynlink = false)
     ?(linkall = false)
     ?source_map
@@ -442,6 +444,7 @@ let f
   let exported_runtime = not standalone in
   let linkall = linkall || dynlink in
   configure formatter
+  +> Effects.f
   +> specialize_js_once
   +> profile
   +> Generate_closure.f

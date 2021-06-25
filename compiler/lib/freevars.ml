@@ -70,6 +70,23 @@ let iter_last_free_var f l =
   | Pushtrap (cont1, _, cont2, _) ->
       iter_cont_free_vars f cont1;
       iter_cont_free_vars f cont2
+  | Resume (x, _, None) ->
+    f x
+  | Resume (x, _, Some cont) ->
+    f x;
+    iter_cont_free_vars f cont
+  | Perform (v0, v1, cont) -> 
+    f v0;
+    f v1;
+    iter_cont_free_vars f cont
+  | Delegate (v0, v1) ->
+    f v0;
+    f v1
+  | LastApply (v0, (v1, vs, _), cont) -> 
+    f v0;
+    f v1;
+    List.iter ~f vs;
+    (match cont with Some c -> iter_cont_free_vars f c | None -> ())
 
 let iter_block_free_vars f block =
   List.iter block.body ~f:(fun i -> iter_instr_free_vars f i);
@@ -82,7 +99,8 @@ let iter_instr_bound_vars f i =
 
 let iter_last_bound_vars f l =
   match l with
-  | Return _ | Raise _ | Stop | Branch _ | Cond _ | Switch _ | Poptrap _ -> ()
+  | Return _ | Raise _ | Stop | Branch _ | Cond _ | Switch _ | Poptrap _
+  | Resume (_, _, _) | Perform (_, _, _) | Delegate (_, _) | LastApply (_, _, _) -> ()
   | Pushtrap (_, x, _, _) -> f x
 
 let iter_block_bound_vars f block =

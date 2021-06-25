@@ -341,6 +341,8 @@ end = struct
           scan debug blocks code (pc + nfuncs + 3) len
       | KClosure -> scan debug blocks code (pc + 3) len
       | KStop n -> scan debug blocks code (pc + n + 1) len
+      | KContextSwitch n ->
+        scan debug blocks code (pc + n + 1) len
       | K_will_not_happen -> assert false
     else (
       assert (pc = len);
@@ -800,7 +802,8 @@ let rec compile_block blocks debug_data code pc state =
     | Switch (_, l1, l2) ->
         Array.iter l1 ~f:(fun (pc', _) -> compile_block blocks debug_data code pc' state');
         Array.iter l2 ~f:(fun (pc', _) -> compile_block blocks debug_data code pc' state')
-    | Pushtrap _ | Raise _ | Return _ | Stop -> ())
+    | Pushtrap _ | Raise _ | Return _ | Stop
+    | Resume _ | Perform _ | Delegate _ | LastApply _ -> ())
 
 and compile infos pc state instrs =
   if debug_parser () then State.print state;
@@ -896,22 +899,22 @@ and compile infos pc state instrs =
             Format.printf "%a" Var.print (List.nth args i)
           done;
           Format.printf ")@.");
-        compile
-          infos
-          (pc + 2)
-          (State.pop 3 state)
-          (Let (x, Apply (f, args, false)) :: instrs)
+        let state = State.pop 3 state in
+          compile_block infos.blocks infos.debug code (pc + 2) state;
+          (instrs,
+           LastApply (x, (f, args, false), Some (pc + 2, State.stack_vars state)),
+           state)
     | APPLY1 ->
         let f = State.accu state in
         let x, state = State.fresh_var state in
         let y = State.peek 0 state in
         if debug_parser ()
         then Format.printf "%a = %a(%a)@." Var.print x Var.print f Var.print y;
-        compile
-          infos
-          (pc + 1)
-          (State.pop 1 state)
-          (Let (x, Apply (f, [ y ], false)) :: instrs)
+        let state = State.pop 1 state in
+          compile_block infos.blocks infos.debug code (pc + 1) state;
+          (instrs,
+          LastApply (x, (f, [y], false), Some (pc + 1, State.stack_vars state)),
+          state)
     | APPLY2 ->
         let f = State.accu state in
         let x, state = State.fresh_var state in
@@ -929,11 +932,11 @@ and compile infos pc state instrs =
             y
             Var.print
             z;
-        compile
-          infos
-          (pc + 1)
-          (State.pop 2 state)
-          (Let (x, Apply (f, [ y; z ], false)) :: instrs)
+        let state = State.pop 2 state in
+        compile_block infos.blocks infos.debug code (pc + 1) state;
+        (instrs,
+          LastApply (x, (f, [y; z], false), Some (pc + 1, State.stack_vars state)),
+          state)
     | APPLY3 ->
         let f = State.accu state in
         let x, state = State.fresh_var state in
@@ -954,11 +957,11 @@ and compile infos pc state instrs =
             z
             Var.print
             t;
-        compile
-          infos
-          (pc + 1)
-          (State.pop 3 state)
-          (Let (x, Apply (f, [ y; z; t ], false)) :: instrs)
+        let state = State.pop 3 state in
+          compile_block infos.blocks infos.debug code (pc + 1) state;
+          (instrs,
+            LastApply (x, (f, [y; z; t], false), Some (pc + 1, State.stack_vars state)),
+            state)
     | APPTERM ->
         let n = getu code (pc + 1) in
         let f = State.accu state in
@@ -972,13 +975,13 @@ and compile infos pc state instrs =
           done;
           Format.printf ")@.");
         let x, state = State.fresh_var state in
-        Let (x, Apply (f, l, false)) :: instrs, Return x, state
+        (instrs, LastApply (x, (f, l, false), None), state)
     | APPTERM1 ->
         let f = State.accu state in
         let x = State.peek 0 state in
         if debug_parser () then Format.printf "return %a(%a)@." Var.print f Var.print x;
         let y, state = State.fresh_var state in
-        Let (y, Apply (f, [ x ], false)) :: instrs, Return y, state
+        (instrs, LastApply (y, (f, [x], false), None), state)
     | APPTERM2 ->
         let f = State.accu state in
         let x = State.peek 0 state in
@@ -986,7 +989,7 @@ and compile infos pc state instrs =
         if debug_parser ()
         then Format.printf "return %a(%a, %a)@." Var.print f Var.print x Var.print y;
         let z, state = State.fresh_var state in
-        Let (z, Apply (f, [ x; y ], false)) :: instrs, Return z, state
+        (instrs, LastApply (z, (f, [x; y], false), None), state)
     | APPTERM3 ->
         let f = State.accu state in
         let x = State.peek 0 state in
@@ -1005,7 +1008,7 @@ and compile infos pc state instrs =
             Var.print
             z;
         let t, state = State.fresh_var state in
-        Let (t, Apply (f, [ x; y; z ], false)) :: instrs, Return t, state
+        (instrs, LastApply (t, (f, [x; y; z], false), None), state)
     | RETURN ->
         let x = State.accu state in
         if debug_parser () then Format.printf "return %a@." Var.print x;
@@ -2047,6 +2050,35 @@ and compile infos pc state instrs =
           (Let (m, Prim (Array_get, [ Pv meths; Pv lab ]))
            :: Let (meths, Field (obj, 0)) :: instrs)
     | STOP -> instrs, Stop, state
+    | RESUME ->
+      let stack = State.accu state in
+      let func = State.peek 0 state in
+      let arg = State.peek 1 state in
+      let state = State.pop 2 state in
+      let (ret, state) = State.fresh_var state in
+      compile_block infos.blocks infos.debug code (pc + 1) state;
+      (instrs,
+       Resume (ret, (stack, func, arg), Some (pc + 1, State.stack_vars state)),
+       state)
+    | RESUMETERM ->
+      let stack = State.accu state in
+      let func = State.peek 0 state in
+      let arg = State.peek 1 state in
+      let state = State.pop 2 state in
+      let (ret, state) = State.fresh_var state in
+      (instrs,
+       Resume (ret, (stack, func, arg), None),
+       state)
+    | PERFORM ->
+      let eff = State.accu state in
+      let (ret, state) = State.fresh_var state in
+      compile_block infos.blocks infos.debug code (pc + 1) state;
+      (instrs, Perform (ret, eff, (pc + 1, State.stack_vars state)), state)
+    | DELEGATETERM ->
+      let eff = State.accu state in
+      let stack = State.peek 0 state in
+      let state = State.pop 2 state in
+      (instrs, Delegate (eff, stack), state)
     | EVENT | BREAK | FIRST_UNIMPLEMENTED_OP -> assert false)
 
 (****)

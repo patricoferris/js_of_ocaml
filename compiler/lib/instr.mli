@@ -168,6 +168,10 @@ type t =
   | RERAISE
   | RAISE_NOTRACE
   | GETSTRINGCHAR
+  | PERFORM
+  | RESUME
+  | RESUMETERM
+  | DELEGATETERM
   | FIRST_UNIMPLEMENTED_OP
 
 type kind =
@@ -184,6 +188,7 @@ type kind =
   | KUnaryCall
   | KBinaryCall
   | KStop of int
+  | KContextSwitch of int
   | K_will_not_happen
 
 type desc =
