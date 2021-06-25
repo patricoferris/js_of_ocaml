@@ -40,6 +40,7 @@ let%expect_test _ =
     +marshal.js
     +md5.js
     +mlBytes.js
+    +memory.js
     +nat.js
     +obj.js
     +parsing.js

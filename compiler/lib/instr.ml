@@ -189,6 +189,7 @@ type kind =
   | KUnaryCall
   | KBinaryCall
   | KStop of int
+  | KContextSwitch of int
   | K_will_not_happen
 
 type desc =

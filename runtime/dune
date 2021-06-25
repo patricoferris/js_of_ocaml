@@ -23,6 +23,7 @@
   marshal.js
   md5.js
   mlBytes.js
+  memory.js
   nat.js
   parsing.js
   stdlib.js

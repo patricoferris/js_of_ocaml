@@ -330,6 +330,10 @@ type last =
   | Switch of Var.t * cont array * cont array
   | Pushtrap of cont * Var.t * cont * Addr.Set.t
   | Poptrap of cont * Addr.t
+  | Resume of Var.t * (Var.t * Var.t * Var.t) * cont option
+  | Perform of Var.t * Var.t * cont
+  | Delegate of Var.t * Var.t
+  | LastApply of Var.t * (Var.t * Var.t list * bool) * cont option
 
 type block =
   { params : Var.t list
@@ -485,6 +489,29 @@ module Print = struct
           cont2
           (String.concat ~sep:", " (List.map (Addr.Set.elements pcs) ~f:string_of_int))
     | Poptrap (c, _) -> Format.fprintf f "poptrap %a" cont c
+    | Resume (ret, (stack, func, arg), Some ct) ->
+      Format.fprintf f "%a = resume (%a, %a, %a) continuation %a"
+        Var.print ret Var.print stack Var.print func Var.print arg cont ct
+    | Resume (ret, (stack, func, arg), None) ->
+        Format.fprintf f "%a = resume_term (%a, %a, %a)"
+          Var.print ret Var.print stack Var.print func Var.print arg
+    | Perform (ret, eff, ct) ->
+        Format.fprintf f "%a = perform %a continuation %a"
+          Var.print ret Var.print eff cont ct
+    | Delegate (eff, stack) ->
+        Format.fprintf f "delegate (%a, %a)"
+          Var.print eff Var.print stack
+    | LastApply (ret, (g, l, exact), ct_opt) ->
+        let cont_opt f = function
+          | None -> ()
+          | Some ct -> Format.fprintf f " continuation %a" cont ct
+        in
+        if exact then
+          Format.fprintf f "%a = %a!(%a)%a" Var.print ret Var.print g
+            var_list l cont_opt ct_opt
+        else
+          Format.fprintf f "%a = %a(%a)%a" Var.print ret Var.print g
+            var_list l cont_opt ct_opt
 
   type xinstr =
     | Instr of instr
@@ -559,8 +586,11 @@ let fold_children blocks pc f accu =
     | None -> accu
   in
   match block.branch with
-  | Return _ | Raise _ | Stop -> accu
-  | Branch (pc', _) | Poptrap ((pc', _), _) | Pushtrap ((pc', _), _, _, _) -> f pc' accu
+  | Return _ | Raise _ | Stop
+  | Delegate _ | Resume (_, _, None) | LastApply (_, _, None) -> accu
+  | Branch (pc', _) | Poptrap ((pc', _), _) | Pushtrap ((pc', _), _, _, _) 
+  | Resume (_, _, Some (pc', _)) | Perform (_, _, (pc', _))
+  | LastApply (_, _, Some (pc', _)) -> f pc' accu
   | Cond (_, (pc1, _), (pc2, _)) ->
       let accu = f pc1 accu in
       let accu = f pc2 accu in
@@ -661,6 +691,12 @@ let invariant { blocks; start; _ } =
           check_cont cont1;
           check_cont cont2
       | Poptrap (cont, _) -> check_cont cont
+      | Resume (_, _, Some cont) -> check_cont cont
+      | Resume (_, _, None) -> ()
+      | Perform (_, _, cont) -> check_cont cont
+      | Delegate _ -> ()
+      | LastApply (_, _, Some cont) -> check_cont cont
+      | LastApply (_, _, None) -> ()
     in
     Addr.Map.iter
       (fun _pc block ->

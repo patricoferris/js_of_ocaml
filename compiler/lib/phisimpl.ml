@@ -79,7 +79,8 @@ let program_deps { blocks; _ } =
           Array.iter a1 ~f:(fun cont -> cont_deps blocks vars deps defs cont);
           Array.iter a2 ~f:(fun cont -> cont_deps blocks vars deps defs cont)
       | Pushtrap (cont, _, _, _) -> cont_deps blocks vars deps defs cont
-      | Poptrap (cont, _) -> cont_deps blocks vars deps defs cont)
+      | Poptrap (cont, _) -> cont_deps blocks vars deps defs cont
+      | _ -> ())
     blocks;
   vars, deps, defs
 

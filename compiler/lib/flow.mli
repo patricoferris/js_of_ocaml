@@ -41,6 +41,7 @@ type def =
   | Phi of Code.Var.Set.t
   | Expr of Code.expr
   | Param
+  | FromOtherStack
 
 type info =
   { info_defs : def array
@@ -65,3 +66,9 @@ val the_int : info -> Code.prim_arg -> int32 option
 val update_def : info -> Code.Var.t -> Code.expr -> unit
 
 val f : ?skip_param:bool -> Code.program -> Code.program * info
+
+val f_block :
+  ?acc:(Code.Var.ISet.t * Code.Var.Set.t array * def array) ->
+  Code.block Code.Addr.Map.t ->
+  Code.block ->
+  Code.Var.ISet.t * Code.Var.Set.t array * def array

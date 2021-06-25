@@ -96,8 +96,10 @@ let rec loop max name round i (p : 'a) : 'a =
 
 let identity x = x
 
-(* o1 *)
+let o0 : 'a -> 'a = print
 
+(* o1 *)
+(* Effects: TODO, TAIL CALL BROKEN  *)
 let o1 : 'a -> 'a =
   print
   +> tailcall
@@ -498,6 +500,7 @@ let full
     ~linkall
     ~source_map
     ~custom_header
+    ~cps
     formatter
     d
     p =
@@ -506,6 +509,7 @@ let full
 
   let opt =
     configure formatter
+    +> (if cps then Effects.f else Fun.id)
     +> specialize_js_once
     +> profile
     +> Generate_closure.f
@@ -531,6 +535,7 @@ let f
     ?(profile = o1)
     ?(dynlink = false)
     ?(linkall = false)
+    ?(cps = false)
     ?source_map
     ?custom_header
     formatter
@@ -544,6 +549,7 @@ let f
     ~linkall
     ~source_map
     ~custom_header
+    ~cps
     formatter
     d
     p

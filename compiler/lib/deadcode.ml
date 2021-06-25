@@ -100,7 +100,26 @@ and mark_reachable st pc =
         Array.iter a2 ~f:(fun cont -> mark_cont_reachable st cont)
     | Pushtrap (cont1, _, cont2, _) ->
         mark_cont_reachable st cont1;
-        mark_cont_reachable st cont2)
+        mark_cont_reachable st cont2
+    (* I don't know what I'm doing here... *)
+    | Resume (v0, (v1, v2, v3), cont) ->
+      mark_var st v0;
+      mark_var st v1;
+      mark_var st v2;
+      mark_var st v3;
+      (match cont with Some c -> mark_cont_reachable st c | None -> ())
+    | Perform (v0, v1, cont) -> 
+      mark_var st v0;
+      mark_var st v1;
+      mark_cont_reachable st cont
+    | Delegate (v0, v1) ->
+      mark_var st v0;
+      mark_var st v1
+    | LastApply (v0, (v1, vs, _), cont) -> 
+      mark_var st v0;
+      mark_var st v1;
+      List.iter ~f:(mark_var st) vs;
+      (match cont with Some c -> mark_cont_reachable st c | None -> ()))
 
 (****)
 
@@ -143,6 +162,12 @@ let filter_live_last blocks st l =
         , filter_cont blocks st cont2
         , Addr.Set.inter pcs st.reachable_blocks )
   | Poptrap (cont, addr) -> Poptrap (filter_cont blocks st cont, addr)
+  | Resume (_, _, None) -> l
+  | Resume (a, b, Some c) -> Resume (a, b, Some (filter_cont blocks st c))
+  | Perform (a, b, cont) -> Perform (a, b, filter_cont blocks st cont)
+  | Delegate _ -> l 
+  | LastApply (_, _, None) -> l 
+  | LastApply (a, b, Some cont) -> LastApply (a, b, Some (filter_cont blocks st cont))
 
 (****)
 
@@ -195,7 +220,7 @@ let f ({ blocks; _ } as p : Code.program) =
           | Set_field (_, _, _) | Array_set (_, _, _) | Offset_ref (_, _) -> ());
       Option.iter block.handler ~f:(fun (_, cont) -> add_cont_dep blocks defs cont);
       match block.branch with
-      | Return _ | Raise _ | Stop -> ()
+      | Return _ | Raise _ | Delegate _ | Stop -> ()
       | Branch cont -> add_cont_dep blocks defs cont
       | Cond (_, cont1, cont2) ->
           add_cont_dep blocks defs cont1;
@@ -204,7 +229,13 @@ let f ({ blocks; _ } as p : Code.program) =
           Array.iter a1 ~f:(fun cont -> add_cont_dep blocks defs cont);
           Array.iter a2 ~f:(fun cont -> add_cont_dep blocks defs cont)
       | Pushtrap (cont, _, _, _) -> add_cont_dep blocks defs cont
-      | Poptrap (cont, _) -> add_cont_dep blocks defs cont)
+      | Poptrap (cont, _) -> add_cont_dep blocks defs cont
+      | Resume (_, _, cont_opt) ->
+        Option.iter ~f:(fun cont -> add_cont_dep blocks defs cont) cont_opt
+      | Perform (_, _, cont) ->
+        add_cont_dep blocks defs cont
+      | LastApply (_, _, cont_opt) ->
+        Option.iter ~f:(fun cont -> add_cont_dep blocks defs cont) cont_opt)
     blocks;
   let st = { live; defs; blocks; reachable_blocks = Addr.Set.empty; pure_funs } in
   mark_reachable st p.start;

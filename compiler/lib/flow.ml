@@ -33,6 +33,7 @@ type def =
   | Phi of Var.Set.t
   | Expr of Code.expr
   | Param
+  | FromOtherStack
 
 type info =
   { info_defs : def array
@@ -57,11 +58,15 @@ let add_expr_def defs x e =
   assert (is_undefined defs.(idx));
   defs.(idx) <- Expr e
 
+let add_effect_def defs x =
+  let idx = Var.idx x in
+  defs.(idx) <- FromOtherStack
+
 let add_assign_def vars defs x y =
   add_var vars x;
   let idx = Var.idx x in
   match defs.(idx) with
-  | Expr _ | Param -> assert false
+  | Expr _ | Param | FromOtherStack -> assert false
   | Phi s -> defs.(idx) <- Phi (Var.Set.add y s)
 
 let add_param_def vars defs x =
@@ -96,33 +101,56 @@ let expr_deps blocks vars deps defs x e =
   | Block (_, a, _) -> Array.iter a ~f:(fun y -> add_dep deps x y)
   | Field (y, _) -> add_dep deps x y
 
+let block_deps blocks vars deps defs block =
+  List.iter
+    ~f:(fun i ->
+        match i with
+          Let (x, e) ->
+          add_var vars x;
+          add_expr_def defs x e;
+          expr_deps blocks vars deps defs x e
+        | Set_field _ | Array_set _ | Offset_ref _ ->
+          ())
+    block.body;
+  Option.iter
+    ~f:(fun (x, cont) ->
+        add_param_def vars defs x;
+        cont_deps blocks vars deps defs cont)
+    block.handler;
+  match block.branch with
+    Return _ | Raise _ | Stop | Delegate _ ->
+    ()
+  | Branch cont | Poptrap (cont, _) ->
+    cont_deps blocks vars deps defs cont
+  | Cond (_, cont1, cont2) ->
+    cont_deps blocks vars deps defs cont1;
+    cont_deps blocks vars deps defs cont2
+  | Switch (_, a1, a2) ->
+    Array.iter ~f:(fun cont -> cont_deps blocks vars deps defs cont) a1;
+    Array.iter ~f:(fun cont -> cont_deps blocks vars deps defs cont) a2
+  | Pushtrap (cont, _, _, _) ->
+    cont_deps blocks vars deps defs cont
+  | Resume (x, _, cont_opt) ->
+    add_var vars x;
+    add_effect_def defs x;
+    Option.iter ~f:(fun cont -> cont_deps blocks vars deps defs cont) cont_opt
+  | Perform (x, _, cont) ->
+    add_var vars x;
+    add_effect_def defs x;
+    cont_deps blocks vars deps defs cont
+  | LastApply (x, (f, args, b), cont_opt) ->
+    add_var vars x;
+    add_expr_def defs x (Apply (f, args, b));
+    expr_deps blocks vars deps defs x (Apply (f, args, b));
+    Option.iter ~f:(fun cont -> cont_deps blocks vars deps defs cont) cont_opt
+
 let program_deps { blocks; _ } =
   let nv = Var.count () in
   let vars = Var.ISet.empty () in
   let deps = Array.make nv Var.Set.empty in
   let defs = Array.make nv undefined in
   Addr.Map.iter
-    (fun _ block ->
-      List.iter block.body ~f:(fun i ->
-          match i with
-          | Let (x, e) ->
-              add_var vars x;
-              add_expr_def defs x e;
-              expr_deps blocks vars deps defs x e
-          | Set_field _ | Array_set _ | Offset_ref _ -> ());
-      Option.iter block.handler ~f:(fun (x, cont) ->
-          add_param_def vars defs x;
-          cont_deps blocks vars deps defs cont);
-      match block.branch with
-      | Return _ | Raise _ | Stop -> ()
-      | Branch cont | Poptrap (cont, _) -> cont_deps blocks vars deps defs cont
-      | Cond (_, cont1, cont2) ->
-          cont_deps blocks vars deps defs cont1;
-          cont_deps blocks vars deps defs cont2
-      | Switch (_, a1, a2) ->
-          Array.iter a1 ~f:(fun cont -> cont_deps blocks vars deps defs cont);
-          Array.iter a2 ~f:(fun cont -> cont_deps blocks vars deps defs cont)
-      | Pushtrap (cont, _, _, _) -> cont_deps blocks vars deps defs cont)
+    (fun _ block -> block_deps blocks vars deps defs block)
     blocks;
   vars, deps, defs
 
@@ -130,7 +158,7 @@ let var_set_lift f s = Var.Set.fold (fun y s -> Var.Set.union (f y) s) s Var.Set
 
 let propagate1 deps defs st x =
   match defs.(Var.idx x) with
-  | Param -> Var.Set.singleton x
+  | Param | FromOtherStack -> Var.Set.singleton x
   | Phi s -> var_set_lift (fun y -> Var.Tbl.get st y) s
   | Expr e -> (
       match e with
@@ -143,7 +171,7 @@ let propagate1 deps defs st x =
                   let t = a.(n) in
                   add_dep deps x t;
                   Var.Tbl.get st t
-              | Phi _ | Param | Expr _ -> Var.Set.empty)
+              | Phi _ | Param | Expr _ | FromOtherStack -> Var.Set.empty)
             (Var.Tbl.get st y))
 
 module G = Dgraph.Make_Imperative (Var) (Var.ISet) (Var.Tbl)
@@ -248,6 +276,15 @@ let program_escape defs known_origins { blocks; _ } =
                 (Var.Tbl.get known_origins x));
       match block.branch with
       | Return x | Raise (x, _) -> block_escape st x
+      (* todo? *)
+      | Resume (_, (x, y, z), _) ->
+      block_escape st x; block_escape st y; block_escape st z
+      | Perform (_, x, _) ->
+      block_escape st x
+      | Delegate (x, y) ->
+      block_escape st x; block_escape st y
+      | LastApply (x, (y, _, _), _) ->
+        block_escape st x; block_escape st y
       | Stop | Branch _ | Cond _ | Switch _ | Pushtrap _ | Poptrap _ -> ())
     blocks;
   possibly_mutable
@@ -256,7 +293,7 @@ let program_escape defs known_origins { blocks; _ } =
 
 let propagate2 ?(skip_param = false) defs known_origins possibly_mutable st x =
   match defs.(Var.idx x) with
-  | Param -> skip_param
+  | Param | FromOtherStack -> skip_param
   | Phi s -> Var.Set.exists (fun y -> Var.Tbl.get st y) s
   | Expr e -> (
       match e with
@@ -270,7 +307,7 @@ let propagate2 ?(skip_param = false) defs known_origins possibly_mutable st x =
                      n >= Array.length a
                      || possibly_mutable.(Var.idx z)
                      || Var.Tbl.get st a.(n)
-                 | Phi _ | Param | Expr _ -> true)
+                 | Phi _ | Param | Expr _ | FromOtherStack -> true)
                (Var.Tbl.get known_origins y))
 
 module Domain2 = struct
@@ -434,3 +471,14 @@ let f ?skip_param p =
   if times () then Format.eprintf "  flow analysis: %a@." Timer.print t;
   Code.invariant p;
   p, info
+
+  let f_block ?acc blocks block =
+    let vars, deps, defs =
+      match acc with
+      | None ->
+        let nv = Var.count () in
+        (Var.ISet.empty (), Array.make nv Var.Set.empty, Array.make nv undefined)
+      | Some acc -> acc
+    in
+    block_deps blocks vars deps defs block;
+    vars, deps, defs

@@ -179,6 +179,10 @@ type last =
   | Switch of Var.t * cont array * cont array
   | Pushtrap of cont * Var.t * cont * Addr.Set.t
   | Poptrap of cont * Addr.t
+  | Resume of Var.t * (Var.t * Var.t * Var.t) * cont option
+  | Perform of Var.t * Var.t * cont
+  | Delegate of Var.t * Var.t
+  | LastApply of Var.t * (Var.t * Var.t list * bool) * cont option
 
 type block =
   { params : Var.t list
