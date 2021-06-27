@@ -1,3 +1,6 @@
 (alias
   (name default)
   (deps index.html (glob_files *.{png})))
+
+; Disabled for effects development
+(data_only_dirs cubes graph_viewer separate_compilation wiki boulderdash hyperbolic minesweeper planet webgl wysiwyg)

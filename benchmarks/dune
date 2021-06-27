@@ -1,8 +1,9 @@
-(executables
-  (names report run)
-  (libraries unix)
-)
+; Disabled for Effects Development
+; (executables
+;   (names report run)
+;   (libraries unix)
+; )
 
-(alias
-  (name default)
-  (deps report.exe run.exe))
+; (alias
+;   (name bench)
+;   (deps report.exe run.exe))

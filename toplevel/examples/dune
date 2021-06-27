@@ -1,0 +1,2 @@
+; Disabled for Effects Dev
+(data_only_dirs eval lwt_toplevel server)

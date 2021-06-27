@@ -1,0 +1,2 @@
+; Currently broken and/or very slow
+(data_only_dirs tests-compiler tests-jsoo tests-num tests-ocaml tests-re)

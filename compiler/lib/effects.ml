@@ -1,5 +1,7 @@
 open Code
 
+let debug = Debug.find "effects"
+
 type graph = {
   root  : Addr.t;
   succs : Addr.Set.t Addr.Map.t;
@@ -84,14 +86,17 @@ let print_graph blocks (g: graph) =
     ) s
   ) g.backs;
 
-   (* Addr.Map.iter (fun k s -> *)
-   (*   Addr.Set.iter (fun v -> *)
-   (*     Printf.eprintf "%d -> %d [style=dashed,color=blue];\n" k v *)
-   (*   ) s *)
-   (* ) g.preds; *)
+   Addr.Map.iter (fun k s ->
+     Addr.Set.iter (fun v ->
+       Printf.eprintf "%d -> %d [style=dashed,color=blue];\n" k v
+     ) s
+   ) g.preds;
 
    Printf.eprintf "}\n"
 
+(* Building the domination map -- this associates a node with a set of nodes 
+   that it dominates, recall a node `d` (strictly) dominates another node `n` 
+   if all paths from the entry to `n` must pass through `d`. *)
 let dominated_by_node (g: graph): Addr.Set.t Addr.Map.t =
   let explore_avoiding v =
     let rec loop node visited =
@@ -119,6 +124,11 @@ let dominated_by_node (g: graph): Addr.Set.t Addr.Map.t =
     ) g.preds dominated_by
   ) all_nodes (Addr.Map.singleton g.root all_nodes)
 
+(* The dominance frontier of a particular node `d` is the set of all 
+   nodes `n_j` such that `d` dominates an immediate predecessor of `n_j`
+   but does NOT dominate `n_j` itself. From the perspective of `d` this 
+   frontier marks the earliest points where other control flow paths that
+   don't go through `d` make an appearance. *)
 let dominance_frontier (g: graph) dominated_by node0 =
   let dom_by_node0 =
     try Addr.Map.find node0 dominated_by with
@@ -153,6 +163,7 @@ let empty_exit_nodes = {
   exit_of_entry = Addr.Map.empty;
 }
 
+
 let trywith_exit_nodes
     (blocks: block Addr.Map.t)
     (g: graph)    
@@ -166,15 +177,22 @@ let trywith_exit_nodes
       Addr.Map.add exit (Addr.Set.add entry entries) entry_of_exit in
     let visited = Addr.Set.add node visited in
     try
+      (* Unvisitied successors *)
       let succs = Addr.Set.diff (Addr.Map.find node g.succs) visited in
+      (* The last branching instruction of the block *)
       match (Addr.Map.find node blocks).branch with
+      (* Exception handler *)
       | Pushtrap ((_, _), _, (pc2, _), _) ->
         Printf.eprintf "%d ==> dominance frontier of %d\n" node pc2;
+        (* Calculate the frontier of the exception handler ? *)
         let frontier = dominance_frontier g dominated_by pc2 in
         Printf.eprintf "frontier:";
         Addr.Set.iter (fun node -> Printf.eprintf " %d" node) frontier;
         Printf.eprintf "\n";
+        (* The frontier should be empty or contain exactly one node ? *)
         assert (Addr.Set.cardinal frontier <= 1);
+        (* [entry_of_exit] is either the previous one or the previous one with this node mapped from the frontier node
+           [exit_of_entry] is either [None] or the single frontier node that we found *)
         let entry_of_exit, exit_of_entry =
           if Addr.Set.is_empty frontier then
             entry_of_exit,
@@ -210,20 +228,29 @@ let delimited_by blocks g exit_nodes : Addr.Set.t Addr.Map.t =
       (delimited_by_acc: Addr.Set.t)
       (delimited_by: Addr.Set.t Addr.Map.t)
     =
+    (* If we haven't visited the pc *)
     if not (Addr.Set.mem pc visited) then begin
+      (* Add the pc to the visited set *)
       let visited = Addr.Set.add pc visited in
+      (* And remove it from the accumulator *)
       let delimited_by_acc = Addr.Set.remove pc delimited_by_acc in
+      (* Add the pc as delimiting what is now in the accumulator *)
       let delimited_by = Addr.Map.add pc delimited_by_acc delimited_by in
-
+      (* Find the associated block with the pc *)
       let block = Addr.Map.find pc blocks in
+      (* Update the delimited accumulator *)
       let delimited_by_acc =
         match block.branch with
-        | Pushtrap _ ->
-          begin match Addr.Map.find pc exit_nodes.exit_of_entry with
-            | None -> delimited_by_acc
-            | Some exit_node -> Addr.Set.add exit_node delimited_by_acc
-          end
-        | _ -> delimited_by_acc in
+          (* The last instruction of the block i.e. how it branches off to the rest of the program *)
+          | Pushtrap _ ->
+            (* A [Pushtrap] is for an exception handler and we look for the try-with part and add it *)
+            begin match Addr.Map.find pc exit_nodes.exit_of_entry with
+              | None -> delimited_by_acc
+              | Some exit_node -> Addr.Set.add exit_node delimited_by_acc
+            end
+          | _ -> delimited_by_acc 
+      in
+      (* Loop over the the successor of the current pc *)
       Addr.Set.fold (fun pc' (visited, delimited_by) ->
         loop pc' visited delimited_by_acc delimited_by)
         (Addr.Map.find pc g.succs)
@@ -241,6 +268,8 @@ let merge_delimited_by d1 d2 =
     | _ -> assert false in
   Addr.Map.merge m d1 d2
 
+(* Assuming defs are the same as the jsoo paper, for a variable x
+   def(x) is the definition which associates things with it it. *)
 let defs_of_exit_scope blocks g exit_nodes :
   (Flow.def array * Var.t Var.Map.t) Addr.Map.t =
   let rec loop
@@ -251,21 +280,23 @@ let defs_of_exit_scope blocks g exit_nodes :
     =
     let accs_of_open_scopes, defs_of_exit_scopes =
       try
-        let ((_, _, d), entry_defs) =
-          Addr.Map.find pc accs_of_open_scopes in
+        let ((_, _, d), entry_defs) = Addr.Map.find pc accs_of_open_scopes in
         Addr.Map.remove pc accs_of_open_scopes,
         Addr.Map.add pc (d, entry_defs) defs_of_exit_scopes
       with Not_found ->
-        accs_of_open_scopes, defs_of_exit_scopes in
-
+        accs_of_open_scopes, defs_of_exit_scopes 
+    in
+    (* If we haven't visted this pc *)
     if not (Addr.Set.mem pc visited) then begin
+      (* Mark as visited *)
       let visited = Addr.Set.add pc visited in
+      (* Find the block it is associated with *)
       let block = Addr.Map.find pc blocks in
 
       let accs_of_open_scopes =
         Addr.Map.map (fun (acc, d) -> (Flow.f_block ~acc blocks block, d))
-          accs_of_open_scopes in
-
+          accs_of_open_scopes 
+      in
       let accs_of_open_scopes =
         match block.branch with
         | Pushtrap ((pc1, params1), _, (pc2, params2), _) ->
@@ -312,7 +343,8 @@ let rec in_this_scope scope_defs v =
   let v = Var.idx v in
   match scope_defs.(v) with
   | Flow.Phi s -> Var.Set.exists (in_this_scope scope_defs) s
-  | Flow.Expr _ | Flow.FromOtherStack -> true
+  | Flow.Expr _ -> Printf.eprintf "EXPR %i\n" v; true
+  | Flow.FromOtherStack -> Printf.eprintf "FOS %i\n" v; true
   | Flow.Param -> assert false
 
 let rec entry_def_of scope_defs entry_defs v =
@@ -328,6 +360,9 @@ let rec entry_def_of scope_defs entry_defs v =
       Var.Set.choose s'
     | _ -> assert false
 
+
+(* The immediate dominator (idom) d of a node n strictly domainates n but does 
+   not strictly dominate any other node that strictly dominates n. *)
 let immediate_dominator_of_node (g: graph) dominated_by: Addr.t Addr.Map.t =
   let dom_by node = get_values node dominated_by in
 
@@ -362,28 +397,37 @@ let empty_jump_closures = {
 }
 
 let jump_closures (g: graph) dominated_by: jump_closures =
+  (* Immediate dominator Map *)
   let idom = immediate_dominator_of_node g dominated_by in
+  (* Jumps to closures and allocations to closures? *)
   let closure_of_jump, closure_of_alloc_site
     =
+    (* Jumps without handlers? *)
     let non_handler_jumps node preds =
       Addr.Set.cardinal @@
       Addr.Set.filter (fun pred ->
         try Addr.Map.find pred g.handler_succ <> node
         with Not_found -> true
       ) preds in
-
+    (* Mapping over the set of nodes and the predecessors, there are two conditions:
+        - There is more than one non-handler jump, in this case we find the immediate 
+          dominator of the current node. We extend the closure_of_jump set to include 
+          the immediate dominator along with the fresh variable for it. 
+          For the allocation sites, we look to see if the idom already has a set in there
+          and either begin or extend it with a new pair, the variable and node
+        - There is no (or one) non-handler jump, we don't need to do anything *)
     Addr.Map.fold (fun node preds (c_o_j, c_o_a_s) ->
       if non_handler_jumps node preds >= 2 then
         let cname = Var.fresh () in
         let idom_node = Addr.Map.find node idom in
-            let closures_to_allocate =
-              try Addr.Map.find idom_node c_o_a_s
-              with Not_found -> [] in
-            let c_o_j = Addr.Map.add node cname c_o_j in
-            let c_o_a_s =
-              Addr.Map.add idom_node ((cname, node) :: closures_to_allocate)
-                c_o_a_s in
-            (c_o_j, c_o_a_s)
+        let closures_to_allocate =
+          try Addr.Map.find idom_node c_o_a_s
+          with Not_found -> [] in
+        let c_o_j = Addr.Map.add node cname c_o_j in
+        let c_o_a_s =
+          Addr.Map.add idom_node ((cname, node) :: closures_to_allocate) c_o_a_s
+        in
+        (c_o_j, c_o_a_s)
       else (c_o_j, c_o_a_s)
     ) g.preds
       (Addr.Map.empty, Addr.Map.empty) in
@@ -465,7 +509,7 @@ let cps_branch st pc k kx kf cont =
   try
     let delim_by = Addr.Map.find pc st.delimited_by in
     if not (Addr.Set.mem caddr delim_by) then raise Not_found;
-    Printf.eprintf "Translated a jump frow %d to %d into a return\n" pc caddr;
+    if debug () then Printf.eprintf "Translated a jump frow %d to %d into a return\n" pc caddr;
     let (scope_defs, _) = Addr.Map.find caddr st.defs_of_exit_node in
     let l = List.filter (in_this_scope scope_defs) (snd cont) in
     assert (List.length l = 1);
@@ -474,9 +518,9 @@ let cps_branch st pc k kx kf cont =
   with Not_found ->
   try
     let cname = Addr.Map.find caddr st.jc.closure_of_jump in
-    Printf.eprintf "cps_branch: %d ~> call v%d params:" caddr (Var.idx cname);
-    List.iter (fun v -> Printf.eprintf " v%d" (Var.idx v)) params;
-    Printf.eprintf "\n\n";
+    if debug () then Printf.eprintf "cps_branch: %d ~> call v%d params:" caddr (Var.idx cname);
+    if debug () then List.iter (fun v -> Printf.eprintf " v%d" (Var.idx v)) params;
+    if debug () then Printf.eprintf "\n\n";
     let ret = Var.fresh () in
     [Let (ret, Apply (cname, params, false))],
     Return ret
@@ -573,12 +617,14 @@ let cps_alloc_stack
    Let (stack_kf, Closure ([v4; v5], (stack_kf_addr, [v4; v5])));
    Let (ret, Closure ([f; v6], (stack_addr, [f; v6])))]
 
+(* CPS transform for the branching part of a block *)
 let cps_last
     st
     (k: Var.t) (kx: Var.t) (kf: Var.t)
     (block_addr: Addr.t) (last: last):
   instr list * last =
   let (@>) instrs1 (instrs2, last) = (instrs1 @ instrs2, last) in
+
   let cps_jump_cont cont =
     let pc, args = filter_cont_params st cont in
     let args = k :: kx :: kf :: args in
@@ -589,7 +635,8 @@ let cps_last
     with Not_found ->
       (pc, args)
   in
-
+  
+  (* Call the continuation and return the result *)
   let cps_return x =
     let kret = Var.fresh () in
     [Let (kret, Apply (k, [x], true))],
@@ -614,39 +661,54 @@ let cps_last
   | Cond (x, cont1, cont2) ->
     [], Cond (x, cps_jump_cont cont1, cps_jump_cont cont2)
   | Switch (x, c1, c2) ->
+    (* We can keep switch statements in the last position by altering their arguments *)
     [], Switch (x, Array.map cps_jump_cont c1, Array.map cps_jump_cont c2)
   | Pushtrap (cont1, x, cont2, pcs) ->
+    (* Handling exceptions - I think cont2 is the exception handler and I guess cont1 is the body ? *)
     Addr.Set.iter 
       (fun pc -> st.kx_of_poptrap <- Addr.Map.add pc kx st.kx_of_poptrap) pcs;
-
+    (* identity function as a continuation *)
     let id_addr = add_block st (identity ()) in
     let id_k, v = fresh2 () in
 
-    Printf.eprintf "=>>>>> handler addr: %d\n" (fst cont2);
+    if debug () then Printf.eprintf "=>>>>> handler addr: %d\n" (fst cont2);
+    
+    (* Turn handler into a closure *)
     let handler, handler_closure =
       closure_of_cont st block_addr [x] id_k kx kf cont2 in
 
-    Printf.eprintf "<== %d\n" block_addr;
+      if debug () then Printf.eprintf "<== %d\n" block_addr;
+    (* For this block look for the exit node (the dominance frontier one I think ?) *)
     begin match Addr.Map.find block_addr st.en.exit_of_entry with
       | None ->
+        (* If there isn't one then add the identity function, the functionalised handler,
+           and a branching statement (in CPS form) with the handler and id function *)
         [Let (id_k, Closure ([v], (id_addr, [v])));
          Let (handler, handler_closure)] @>
         cps_branch st block_addr id_k handler kf cont1
 
       | Some cont_addr ->
+        (* If we do find an exit node then find the block for where it is going *)
         let cont_block = Addr.Map.find cont_addr st.blocks in
         let dummy, dummy_v, body_ret = fresh3 () in
+
+        (* Closurise the body of the block that is being pointed to *)
         let body, body_closure =
           closure_of_cont st block_addr [dummy] id_k handler kf cont1 in
 
+        (* New instructions and new final branching statement*)  
         let continue_instrs, last =
+          (* Condition: if the exit node is a member of this blocks delimited_by set *)
           if Addr.Set.mem cont_addr (Addr.Map.find block_addr st.delimited_by) then
+            (* Nothing, we are done and can return body_ret ? Isn't this some random floating variable ? *)
             [], Return body_ret
           else begin
-            Printf.eprintf "<> find defs of exit node: %d\n" cont_addr;
+            (* If there is a delimited exit *)
+            if debug () then Printf.eprintf "<> find defs of exit node: %d\n" cont_addr;
+            (* Defs of exit node *)
             let (scope_defs, entry_defs) = Addr.Map.find cont_addr st.defs_of_exit_node in
             let l = List.filter (in_this_scope scope_defs) cont_block.params in
-            Printf.eprintf "length: %d\n" (List.length l);
+            if debug () then Printf.eprintf "length: %d\n" (List.length l);
             assert (List.length l = 1);
             let interesting_param = List.hd l in
             let interesting_arg = Var.fresh () in
@@ -740,23 +802,32 @@ let cps_instr
   | _ ->
     [instr]
 
+(* Perform CPS for a specifc block of instructions *)
 let cps_block st block_addr block =
+  (* Three fresh variables *)
   let k, kx, kf = fresh3 () in
-
+  (* Allocate a jump closure *)
   let alloc_jump_closure =
     try
+      (* For our jumps we are going to allocate a new closure wherever we need to *)
       let to_allocate = Addr.Map.find block_addr st.jc.closure_of_alloc_site in
       List.map (fun (cname, jump_addr) ->
+        (* Find wherever it is we are going to jump to *)
         let jump_block = Addr.Map.find jump_addr st.blocks in
         let k, kx, kf = fresh3 () in
+        (* Install our extra new parameters to the block *)
         let fresh_params =
           k :: kx :: kf :: List.map (fun _ -> Var.fresh ()) jump_block.params in
+        (* Allocate our closure which now goes to the jump address *)
         Let (cname, Closure (fresh_params, (jump_addr, fresh_params)))
       ) to_allocate
     with Not_found ->
       []
   in
-
+  
+  (* Perform CPS on the last branching part of the block this will return some new 
+     CPS-specifc instructions to append to the block along with the new final branching 
+     instruction *)
   let last_instrs, last = cps_last st k kx kf block_addr block.branch in
 
   let body =
@@ -788,18 +859,18 @@ let nop_block block =
     body = block.body @ add_instr }
 
 let nop { start; blocks; free_pc } =
-  let g = build_graph blocks start in
-  let dom_by = dominated_by_node g in
-  print_graph blocks g;
+  (* let g = build_graph blocks start in *)
+  (* let dom_by = dominated_by_node g in *)
+  (* print_graph blocks g; *)
 
-  Printf.eprintf "\nidom:\n";
+  (* Printf.eprintf "\nidom:\n"; *)
 
-  let idom = immediate_dominator_of_node g dom_by in
-  Addr.Map.iter (fun node dom ->
+  (* let idom = immediate_dominator_of_node g dom_by in *)
+  (* Addr.Map.iter (fun node dom ->
     Printf.eprintf "%d -> %d\n" node dom;
   ) idom;
 
-  Printf.eprintf "\n";
+  Printf.eprintf "\n"; *)
 
   let blocks = Addr.Map.map nop_block blocks in
   { start; blocks; free_pc }
@@ -816,94 +887,97 @@ let f ({ start; blocks; free_pc }: Code.program): Code.program =
     Addr.Set.t Addr.Map.t *
     (Flow.def array * Var.t Var.Map.t) Addr.Map.t
     =
-    print_endline "EFFECT START";
+    (* print_endline "EFFECT START"; *)
     Code.fold_closures { start; blocks; free_pc }
       (fun _ _ (start, _) (jc, en, db, does) ->
-         (* Printf.eprintf ">> Start: %d\n\n" start; *)
+         if debug () then Printf.eprintf ">> Start: %d\n\n" start;
          let cfg = build_graph blocks start in
          let dom_by = dominated_by_node cfg in
+         if debug () then begin
+          Printf.eprintf "dominated_by: \n";
+          Addr.Map.iter (fun node dom ->
+            Printf.eprintf "%d ->" node;
+            Addr.Set.iter (fun node' ->
+              Printf.eprintf " %d" node') dom;
+            Printf.eprintf "\n"
+          ) dom_by;
+          Printf.eprintf "\n";
 
-         (* Printf.eprintf "dominated_by: \n";
-         Addr.Map.iter (fun node dom ->
-           Printf.eprintf "%d ->" node;
-           Addr.Set.iter (fun node' ->
-             Printf.eprintf " %d" node') dom;
-           Printf.eprintf "\n"
-         ) dom_by;
-         Printf.eprintf "\n";
-
-         print_graph blocks cfg; Printf.eprintf "%!"; *)
+          print_graph blocks cfg; Printf.eprintf "%!"
+         end; 
 
          let closure_jc = jump_closures cfg dom_by in
          let closure_en = trywith_exit_nodes blocks cfg dom_by in
          let closure_db = delimited_by blocks cfg closure_en in
          let closure_does = defs_of_exit_scope blocks cfg closure_en in
 
-         (* Printf.eprintf "\nidom:\n";
+         if debug () then Printf.eprintf "\nidom:\n";
 
          let idom = immediate_dominator_of_node cfg dom_by in
-         Addr.Map.iter (fun node dom ->
-           Printf.eprintf "%d -> %d\n" node dom;
-         ) idom;
+         if debug () then begin 
+          Addr.Map.iter (fun node dom ->
+            Printf.eprintf "%d -> %d\n" node dom;
+          ) idom;
 
-         Printf.eprintf "\nClosure of alloc site:\n";
-         Addr.Map.iter (fun block to_allocate ->
-           List.iter (fun (cname, caddr) ->
-             Printf.eprintf "%d -> v%d, %d\n" block (Var.idx cname) caddr;
-           ) to_allocate
-         ) closure_jc.closure_of_alloc_site;
+          Printf.eprintf "\nClosure of alloc site:\n";
+          Addr.Map.iter (fun block to_allocate ->
+            List.iter (fun (cname, caddr) ->
+              Printf.eprintf "%d -> v%d, %d\n" block (Var.idx cname) caddr;
+            ) to_allocate
+          ) closure_jc.closure_of_alloc_site;
 
-         Printf.eprintf "\nClosure of jump:\n";
-         Addr.Map.iter (fun block cname ->
-           Printf.eprintf "%d -> v%d\n" block (Var.idx cname);
-         ) closure_jc.closure_of_jump;
-         Printf.eprintf "\n";
+          Printf.eprintf "\nClosure of jump:\n";
+          Addr.Map.iter (fun block cname ->
+            Printf.eprintf "%d -> v%d\n" block (Var.idx cname);
+          ) closure_jc.closure_of_jump;
+          Printf.eprintf "\n";
 
-         Printf.eprintf "\nExit node of entry node:\n";
-         Addr.Map.iter (fun entry exit ->
-           Printf.eprintf "%d -> " entry;
-           (match exit with
-            | None -> Printf.eprintf "None"
-            | Some n -> Printf.eprintf "%d" n);
-           Printf.eprintf "\n"
-         ) closure_en.exit_of_entry;
+          Printf.eprintf "\nExit node of entry node:\n";
+          Addr.Map.iter (fun entry exit ->
+            Printf.eprintf "%d -> " entry;
+            (match exit with
+              | None -> Printf.eprintf "None"
+              | Some n -> Printf.eprintf "%d" n);
+            Printf.eprintf "\n"
+          ) closure_en.exit_of_entry;
 
-         Printf.eprintf "\nEntry node of exit node:\n";
-         Addr.Map.iter (fun exit entries ->
-           Printf.eprintf "%d ->" exit;
-           Addr.Set.iter (fun e -> Printf.eprintf " %d" e) entries;
-           Printf.eprintf "\n%!";
-         ) closure_en.entry_of_exit;
+          Printf.eprintf "\nEntry node of exit node:\n";
+          Addr.Map.iter (fun exit entries ->
+            Printf.eprintf "%d ->" exit;
+            Addr.Set.iter (fun e -> Printf.eprintf " %d" e) entries;
+            Printf.eprintf "\n%!";
+          ) closure_en.entry_of_exit;
 
-         Printf.eprintf "\nDelimited by:\n";
-         Addr.Map.iter (fun addr delim ->
-           Printf.eprintf "%d ->" addr;
-           Addr.Set.iter (fun e -> Printf.eprintf " %d" e) delim;
-           Printf.eprintf "\n%!";
-         ) closure_db;
+          Printf.eprintf "\nDelimited by:\n";
+          Addr.Map.iter (fun addr delim ->
+            Printf.eprintf "%d ->" addr;
+            Addr.Set.iter (fun e -> Printf.eprintf " %d" e) delim;
+            Printf.eprintf "\n%!";
+          ) closure_db;
 
-         Printf.eprintf "\nDefs of exit scope:\n";
-         Addr.Map.iter (fun exit (defs, entry_defs) ->
-           Printf.eprintf "- Exit %d:\n" exit;
-           Printf.eprintf "+ defs:\n";
-           Array.iteri (fun i d ->
-             Printf.eprintf "%d ->" i;
-             (match d with
-              | Flow.Phi s ->
-                Var.Set.iter (fun v -> Printf.eprintf " v%d" (Var.idx v)) s
-              | Flow.Expr _ -> Printf.eprintf " Expr"
-              | Flow.Param -> Printf.eprintf " Param"
-              | Flow.FromOtherStack -> Printf.eprintf " FromOtherStack");
-             Printf.eprintf "\n"
-           ) defs;
+          Printf.eprintf "\nDefs of exit scope:\n";
+          Addr.Map.iter (fun exit (defs, entry_defs) ->
+            Printf.eprintf "- Exit %d:\n" exit;
+            Printf.eprintf "+ defs:\n";
+            Array.iteri (fun i d ->
+              Printf.eprintf "%d ->" i;
+              (match d with
+                | Flow.Phi s ->
+                  Var.Set.iter (fun v -> Printf.eprintf " v%d" (Var.idx v)) s
+                | Flow.Expr _ -> Printf.eprintf " Expr"
+                | Flow.Param -> Printf.eprintf " Param"
+                | Flow.FromOtherStack -> Printf.eprintf " FromOtherStack");
+              Printf.eprintf "\n"
+            ) defs;
 
-           Printf.eprintf "+ Entry defs:\n";
-           Var.Map.iter (fun k v ->
-             Printf.eprintf "v%d -> v%d\n" (Var.idx k) (Var.idx v)
-           ) entry_defs;
-           Printf.eprintf "\n";
+            Printf.eprintf "+ Entry defs:\n";
+            Var.Map.iter (fun k v ->
+              Printf.eprintf "v%d -> v%d\n" (Var.idx k) (Var.idx v)
+            ) entry_defs;
+            Printf.eprintf "\n";
 
-         ) closure_does; *)
+            ) closure_does
+          end; 
 
          (merge_jump_closures closure_jc jc,
           merge_exit_nodes closure_en en,
@@ -946,5 +1020,5 @@ let f ({ start; blocks; free_pc }: Code.program): Code.program =
          | None,   Some b -> Some b
          | _ -> assert false)
       blocks new_blocks in
-    print_endline "EFFECT END";
+    (* print_endline "EFFECT END"; *)
   { start = new_start; blocks; free_pc }

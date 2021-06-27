@@ -92,10 +92,9 @@ let rec loop max name round i (p : 'a) : 'a =
 
 let identity x = x
 
-let o0 : 'a -> 'a = print
+let o0 = identity
 
 (* o1 *)
-(* Effects: TODO, TAIL CALL BROKEN  *)
 let o1 : 'a -> 'a =
   print
   +> tailcall
@@ -431,6 +430,10 @@ let configure formatter p =
 
 type profile = Code.program -> Code.program
 
+(* let annot _ = function 
+    | Code.Print.Instr x -> Code.Print.instr Format.str_formatter x; Format.flush_str_formatter ()
+    | Code.Print.Last x -> Code.Print.last Format.str_formatter x;  Format.flush_str_formatter () *)
+
 let f
     ?(standalone = true)
     ?(global = `Auto)
@@ -460,6 +463,6 @@ let from_string prims s formatter =
   let p, d = Parse_bytecode.from_string prims s in
   f ~standalone:false ~global:`Function formatter d p
 
-let profiles = [ 1, o1; 2, o2; 3, o3 ]
+let profiles = [ 0, o0; 1, o1; 2, o2; 3, o3 ]
 
 let profile i = try Some (List.assoc i profiles) with Not_found -> None
