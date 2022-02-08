@@ -206,8 +206,10 @@ function caml_ml_channel_size_64(chanid) {
 //Provides: caml_ml_set_channel_output
 //Requires: caml_ml_channels, caml_global_data
 function caml_ml_set_channel_output(chanid,f) {
+  console.log ("OUT!");
   var chan = caml_ml_channels[chanid];
   caml_global_data.fds[chan.fd].output = f;
+  console.log ("OUT!w");
   return 0;
 }
 

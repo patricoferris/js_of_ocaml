@@ -7,7 +7,9 @@
   bigstring-core_kernel.js
   bigstring-cstruct.js
   bigstring.js
+  domain.js
   dynlink.js
+  fiber.js
   fs.js
   fs_fake.js
   fs_node.js
