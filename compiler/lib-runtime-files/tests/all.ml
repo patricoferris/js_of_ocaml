@@ -19,8 +19,10 @@ let%expect_test _ =
     +bigstring-cstruct.js
     +bigstring.js
     +compare.js
+    +domain.js
     +dynlink.js
     +fail.js
+    +fiber.js
     +format.js
     +fs.js
     +fs_fake.js
@@ -58,7 +60,9 @@ let%expect_test _ =
     +bigstring-cstruct.js
     +bigstring.js
     +compare.js
+    +domain.js
     +fail.js
+    +fiber.js
     +format.js
     +fs.js
     +fs_fake.js

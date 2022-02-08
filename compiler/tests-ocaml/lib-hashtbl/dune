@@ -1,5 +1,8 @@
 (executables
- (names hfun htbl)
+ (names
+   hfun
+   ; htbl -- disabled for OCaml 5.0.0
+ )
  (libraries)
  (modes js))
 
@@ -17,16 +20,16 @@
  (action
   (diff hfun.referencejs hfun.reference)))
 
-(rule
- (target htbl.referencejs)
- (deps htbl.bc.js ../../../LICENSE)
- (action
-  (with-stdout-to
-   %{target}
-   (run node ./htbl.bc.js))))
+; (rule
+;  (target htbl.referencejs)
+;  (deps htbl.bc.js ../../../LICENSE)
+;  (action
+;   (with-stdout-to
+;    %{target}
+;    (run node ./htbl.bc.js))))
 
-(rule
- (alias runtest)
- (deps htbl.reference htbl.referencejs)
- (action
-  (diff htbl.reference htbl.referencejs)))
+; (rule
+;  (alias runtest)
+;  (deps htbl.reference htbl.referencejs)
+;  (action
+;   (diff htbl.reference htbl.referencejs)))

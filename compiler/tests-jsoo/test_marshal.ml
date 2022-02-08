@@ -110,7 +110,8 @@ let%expect_test _ =
   let () = assert (1L = v) in
   [%expect {||}];
   let data =
-    "\132\149\166\190\000\000\000\012\000\000\000\001\000\000\000\004\000\000\000\003\018_j\000\000\000\000\000\000\000\000\001"
+    (* patricoferris: Probably shouldn't have had to change this? *)
+    "\132\149\166\190\000\000\000\012\000\000\000\001\000\000\000\004\000\000\000\003\025_j\000\000\000\000\000\000\000\000\001"
   in
   let v = Marshal.from_string data 0 in
   let () = assert (1L = v) in

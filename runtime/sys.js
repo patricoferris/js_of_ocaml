@@ -230,6 +230,14 @@ function caml_sys_random_seed () {
   return [0,x];
 }
 
+// Provides: caml_lxm_next
+// Requires: caml_sys_random_seed, caml_int64_of_int32
+// Doesn't implement the splittable PRNG because we only have one domain
+function caml_lxm_next () {
+  var x = (caml_sys_random_seed())[1];
+  return caml_int64_of_int32(x);
+}
+
 //Provides: caml_sys_const_big_endian const
 function caml_sys_const_big_endian () { return 0; }
 

@@ -52,6 +52,8 @@ let runtime =
     ; str
     ; unix
     ; weak
+    ; domain
+    ; fiber
     ]
 
 include Files
