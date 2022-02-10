@@ -54,6 +54,5 @@ function caml_thread_initialize(unit) {
 
 //Provides: caml_ml_mutex_new
 function caml_ml_mutex_new(t) {
-  console.log ("NEW MUTEX");
   return 0;
 }

@@ -67,12 +67,6 @@ function caml_raise_zero_divide () {
 function caml_raise_not_found () {
   caml_raise_constant(caml_global_data.Not_found); }
 
-  //Provides: caml_raise_not_found
-//Requires: caml_raise_constant, caml_global_data
-function caml_raise_not_found () {
-  caml_raise_constant(caml_global_data.Not_found); }
-
-
 //Provides: caml_array_bound_error
 //Requires: caml_invalid_argument
 function caml_array_bound_error () {
