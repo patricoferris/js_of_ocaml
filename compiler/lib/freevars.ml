@@ -79,7 +79,7 @@ let iter_last_free_var f l =
     f v0;
     f v1;
     iter_cont_free_vars f cont
-  | Delegate (v0, v1) ->
+  | Reperform (v0, v1) ->
     f v0;
     f v1
   | LastApply (v0, (v1, vs, _), cont) -> 
@@ -100,7 +100,7 @@ let iter_instr_bound_vars f i =
 let iter_last_bound_vars f l =
   match l with
   | Return _ | Raise _ | Stop | Branch _ | Cond _ | Switch _ | Poptrap _
-  | Resume (_, _, _) | Perform (_, _, _) | Delegate (_, _) | LastApply (_, _, _) -> ()
+  | Resume (_, _, _) | Perform (_, _, _) | Reperform (_, _) | LastApply (_, _, _) -> ()
   | Pushtrap (_, x, _, _) -> f x
 
 let iter_block_bound_vars f block =

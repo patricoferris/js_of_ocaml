@@ -318,7 +318,8 @@ let the_cond_of info x =
             | Int64 _ )) -> Non_zero
       | Expr (Block (_, _, _)) -> Non_zero
       | Expr (Field _ | Closure _ | Prim _ | Apply _) -> Unknown
-      | Param | Phi _ -> Unknown)
+      | Param | Phi _ -> Unknown
+      | FromOtherStack -> assert false (* TODO *))
     Unknown
     (fun u v ->
       match u, v with
@@ -364,7 +365,7 @@ let rec do_not_raise pc visited blocks =
     match b.branch with
     | Raise _ -> raise May_raise
     | Stop | Return _ | Poptrap _ | Resume (_, _, None)
-    | LastApply (_, _, None) | Delegate _  -> visited
+    | LastApply (_, _, None) | Reperform _  -> visited
     | Resume (_, _, Some (pc, _)) -> do_not_raise pc visited blocks
     | Perform (_, _, (pc, _)) -> do_not_raise pc visited blocks
     | LastApply (_, _, Some (pc, _)) -> do_not_raise pc visited blocks

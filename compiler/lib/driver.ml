@@ -96,8 +96,6 @@ let rec loop max name round i (p : 'a) : 'a =
 
 let identity x = x
 
-let o0 : 'a -> 'a = print
-
 (* o1 *)
 (* Effects: TODO, TAIL CALL BROKEN  *)
 let o1 : 'a -> 'a =
@@ -561,6 +559,7 @@ let from_string prims s formatter =
     ~wrap_with_fun:`Anonymous
     ~profile:o1
     ~dynlink:false
+    ~cps:false
     ~linkall:false
     ~source_map:None
     ~custom_header:None

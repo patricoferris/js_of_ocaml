@@ -7,7 +7,6 @@ caml_alloc_dummy_infix
 caml_alloc_stack
 caml_continuation_use
 caml_continuation_use_and_update_handler_noexc
-caml_continuation_use_noexc
 caml_domain_spawn
 caml_drop_continuation
 caml_dynlink_add_primitive

@@ -112,7 +112,7 @@ and mark_reachable st pc =
       mark_var st v0;
       mark_var st v1;
       mark_cont_reachable st cont
-    | Delegate (v0, v1) ->
+    | Reperform (v0, v1) ->
       mark_var st v0;
       mark_var st v1
     | LastApply (v0, (v1, vs, _), cont) -> 
@@ -165,7 +165,7 @@ let filter_live_last blocks st l =
   | Resume (_, _, None) -> l
   | Resume (a, b, Some c) -> Resume (a, b, Some (filter_cont blocks st c))
   | Perform (a, b, cont) -> Perform (a, b, filter_cont blocks st cont)
-  | Delegate _ -> l 
+  | Reperform _ -> l 
   | LastApply (_, _, None) -> l 
   | LastApply (a, b, Some cont) -> LastApply (a, b, Some (filter_cont blocks st cont))
 
@@ -220,7 +220,7 @@ let f ({ blocks; _ } as p : Code.program) =
           | Set_field (_, _, _) | Array_set (_, _, _) | Offset_ref (_, _) -> ());
       Option.iter block.handler ~f:(fun (_, cont) -> add_cont_dep blocks defs cont);
       match block.branch with
-      | Return _ | Raise _ | Delegate _ | Stop -> ()
+      | Return _ | Raise _ | Reperform _ | Stop -> ()
       | Branch cont -> add_cont_dep blocks defs cont
       | Cond (_, cont1, cont2) ->
           add_cont_dep blocks defs cont1;

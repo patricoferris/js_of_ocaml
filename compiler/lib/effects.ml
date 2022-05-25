@@ -1,5 +1,7 @@
 open Code
 
+let debug = Debug.find "eff"
+
 type graph = {
   root  : Addr.t;
   succs : Addr.Set.t Addr.Map.t;
@@ -62,6 +64,7 @@ let build_graph (blocks: block Addr.Map.t) (pc: Addr.t): graph =
   g
 
 let print_graph blocks (g: graph) =
+  if (not @@ debug ()) then () else 
   let is_handler_succ v v' =
     match (Addr.Map.find v blocks).handler with
     | None -> false
@@ -700,7 +703,7 @@ let cps_last
      Let (cur_stack, Closure ([f; v], (stack, [f; v])));
      Let (kfret, Apply (kf, [eff; cur_stack], true))],
     Return kfret
-  | Delegate (eff, stack) ->
+  | Reperform (eff, stack) ->
     let kfret = Var.fresh () in
     [Let (kfret, Apply (kf, [eff; stack], true))],
     Return kfret

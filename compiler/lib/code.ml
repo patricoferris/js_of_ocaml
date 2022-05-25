@@ -332,7 +332,7 @@ type last =
   | Poptrap of cont * Addr.t
   | Resume of Var.t * (Var.t * Var.t * Var.t) * cont option
   | Perform of Var.t * Var.t * cont
-  | Delegate of Var.t * Var.t
+  | Reperform of Var.t * Var.t
   | LastApply of Var.t * (Var.t * Var.t list * bool) * cont option
 
 type block =
@@ -498,7 +498,7 @@ module Print = struct
     | Perform (ret, eff, ct) ->
         Format.fprintf f "%a = perform %a continuation %a"
           Var.print ret Var.print eff cont ct
-    | Delegate (eff, stack) ->
+    | Reperform (eff, stack) ->
         Format.fprintf f "delegate (%a, %a)"
           Var.print eff Var.print stack
     | LastApply (ret, (g, l, exact), ct_opt) ->
@@ -587,7 +587,7 @@ let fold_children blocks pc f accu =
   in
   match block.branch with
   | Return _ | Raise _ | Stop
-  | Delegate _ | Resume (_, _, None) | LastApply (_, _, None) -> accu
+  | Reperform _ | Resume (_, _, None) | LastApply (_, _, None) -> accu
   | Branch (pc', _) | Poptrap ((pc', _), _) | Pushtrap ((pc', _), _, _, _) 
   | Resume (_, _, Some (pc', _)) | Perform (_, _, (pc', _))
   | LastApply (_, _, Some (pc', _)) -> f pc' accu
@@ -694,7 +694,7 @@ let invariant { blocks; start; _ } =
       | Resume (_, _, Some cont) -> check_cont cont
       | Resume (_, _, None) -> ()
       | Perform (_, _, cont) -> check_cont cont
-      | Delegate _ -> ()
+      | Reperform _ -> ()
       | LastApply (_, _, Some cont) -> check_cont cont
       | LastApply (_, _, None) -> ()
     in

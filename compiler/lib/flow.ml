@@ -118,7 +118,7 @@ let block_deps blocks vars deps defs block =
         cont_deps blocks vars deps defs cont)
     block.handler;
   match block.branch with
-    Return _ | Raise _ | Stop | Delegate _ ->
+    Return _ | Raise _ | Stop | Reperform _ ->
     ()
   | Branch cont | Poptrap (cont, _) ->
     cont_deps blocks vars deps defs cont
@@ -281,7 +281,7 @@ let program_escape defs known_origins { blocks; _ } =
       block_escape st x; block_escape st y; block_escape st z
       | Perform (_, x, _) ->
       block_escape st x
-      | Delegate (x, y) ->
+      | Reperform (x, y) ->
       block_escape st x; block_escape st y
       | LastApply (x, (y, _, _), _) ->
         block_escape st x; block_escape st y

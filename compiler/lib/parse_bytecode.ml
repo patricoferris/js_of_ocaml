@@ -806,7 +806,7 @@ let rec compile_block blocks debug_data code pc state =
         Array.iter l1 ~f:(fun (pc', _) -> compile_block blocks debug_data code pc' state');
         Array.iter l2 ~f:(fun (pc', _) -> compile_block blocks debug_data code pc' state')
     | Pushtrap _ | Raise _ | Return _ | Stop
-    | Resume _ | Perform _ | Delegate _ | LastApply _ -> ())
+    | Resume _ | Perform _ | Reperform _ | LastApply _ -> ())
 
 and compile infos pc state instrs =
   if debug_parser () then State.print state;

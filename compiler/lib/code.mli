@@ -181,7 +181,7 @@ type last =
   | Poptrap of cont * Addr.t
   | Resume of Var.t * (Var.t * Var.t * Var.t) * cont option
   | Perform of Var.t * Var.t * cont
-  | Delegate of Var.t * Var.t
+  | Reperform of Var.t * Var.t
   | LastApply of Var.t * (Var.t * Var.t list * bool) * cont option
 
 type block =
