@@ -182,14 +182,15 @@ class map : mapper =
     method program x = m#sources x
   end
 
-class unsuspend = object(self)
-  inherit map as super
+class unsuspend =
+  object (self)
+    inherit map as super
 
-  method statement = function
-    | Suspended_statement thunk ->
-      self#statement (thunk ())
-    | s -> super#statement s
-end
+    method statement =
+      function
+      | Suspended_statement thunk -> self#statement (thunk ())
+      | s -> super#statement s
+  end
 
 (* var substitution *)
 class subst sub =

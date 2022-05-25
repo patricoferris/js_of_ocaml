@@ -102,24 +102,28 @@ and mark_reachable st pc =
         mark_cont_reachable st cont1;
         mark_cont_reachable st cont2
     (* I don't know what I'm doing here... *)
-    | Resume (v0, (v1, v2, v3), cont) ->
-      mark_var st v0;
-      mark_var st v1;
-      mark_var st v2;
-      mark_var st v3;
-      (match cont with Some c -> mark_cont_reachable st c | None -> ())
-    | Perform (v0, v1, cont) -> 
-      mark_var st v0;
-      mark_var st v1;
-      mark_cont_reachable st cont
+    | Resume (v0, (v1, v2, v3), cont) -> (
+        mark_var st v0;
+        mark_var st v1;
+        mark_var st v2;
+        mark_var st v3;
+        match cont with
+        | Some c -> mark_cont_reachable st c
+        | None -> ())
+    | Perform (v0, v1, cont) ->
+        mark_var st v0;
+        mark_var st v1;
+        mark_cont_reachable st cont
     | Reperform (v0, v1) ->
-      mark_var st v0;
-      mark_var st v1
-    | LastApply (v0, (v1, vs, _), cont) -> 
-      mark_var st v0;
-      mark_var st v1;
-      List.iter ~f:(mark_var st) vs;
-      (match cont with Some c -> mark_cont_reachable st c | None -> ()))
+        mark_var st v0;
+        mark_var st v1
+    | LastApply (v0, (v1, vs, _), cont) -> (
+        mark_var st v0;
+        mark_var st v1;
+        List.iter ~f:(mark_var st) vs;
+        match cont with
+        | Some c -> mark_cont_reachable st c
+        | None -> ()))
 
 (****)
 
@@ -165,8 +169,8 @@ let filter_live_last blocks st l =
   | Resume (_, _, None) -> l
   | Resume (a, b, Some c) -> Resume (a, b, Some (filter_cont blocks st c))
   | Perform (a, b, cont) -> Perform (a, b, filter_cont blocks st cont)
-  | Reperform _ -> l 
-  | LastApply (_, _, None) -> l 
+  | Reperform _ -> l
+  | LastApply (_, _, None) -> l
   | LastApply (a, b, Some cont) -> LastApply (a, b, Some (filter_cont blocks st cont))
 
 (****)
@@ -231,11 +235,10 @@ let f ({ blocks; _ } as p : Code.program) =
       | Pushtrap (cont, _, _, _) -> add_cont_dep blocks defs cont
       | Poptrap (cont, _) -> add_cont_dep blocks defs cont
       | Resume (_, _, cont_opt) ->
-        Option.iter ~f:(fun cont -> add_cont_dep blocks defs cont) cont_opt
-      | Perform (_, _, cont) ->
-        add_cont_dep blocks defs cont
+          Option.iter ~f:(fun cont -> add_cont_dep blocks defs cont) cont_opt
+      | Perform (_, _, cont) -> add_cont_dep blocks defs cont
       | LastApply (_, _, cont_opt) ->
-        Option.iter ~f:(fun cont -> add_cont_dep blocks defs cont) cont_opt)
+          Option.iter ~f:(fun cont -> add_cont_dep blocks defs cont) cont_opt)
     blocks;
   let st = { live; defs; blocks; reachable_blocks = Addr.Set.empty; pure_funs } in
   mark_reachable st p.start;

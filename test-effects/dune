@@ -1,4 +1,5 @@
 (executables
  (names effects no_effects)
- (js_of_ocaml (flags (:standard --debug gen --debug eff --debug parser)))
+ (js_of_ocaml
+  (flags (:standard)))
  (modes js))

@@ -276,18 +276,18 @@ struct
     | For_statement (_, _, _, st)
     | ForIn_statement (_, _, st) -> ends_with_if_without_else st
     | If_statement (_, _, None) -> true
-    | Block _ 
-    | Variable_statement _ 
-    | Empty_statement 
-    | Expression_statement _ 
+    | Block _
+    | Variable_statement _
+    | Empty_statement
+    | Expression_statement _
     | Suspended_statement _
-    | Continue_statement _ 
-    | Break_statement _ 
-    | Return_statement _ 
+    | Continue_statement _
+    | Break_statement _
+    | Return_statement _
     | Throw_statement _
-    | Do_while_statement _ 
-    | Switch_statement _ 
-    | Try_statement _ 
+    | Do_while_statement _
+    | Switch_statement _
+    | Try_statement _
     | Debugger_statement -> false
 
   let rec need_paren l e =

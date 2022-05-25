@@ -104,54 +104,48 @@ let expr_deps blocks vars deps defs x e =
 let block_deps blocks vars deps defs block =
   List.iter
     ~f:(fun i ->
-        match i with
-          Let (x, e) ->
+      match i with
+      | Let (x, e) ->
           add_var vars x;
           add_expr_def defs x e;
           expr_deps blocks vars deps defs x e
-        | Set_field _ | Array_set _ | Offset_ref _ ->
-          ())
+      | Set_field _ | Array_set _ | Offset_ref _ -> ())
     block.body;
   Option.iter
     ~f:(fun (x, cont) ->
-        add_param_def vars defs x;
-        cont_deps blocks vars deps defs cont)
+      add_param_def vars defs x;
+      cont_deps blocks vars deps defs cont)
     block.handler;
   match block.branch with
-    Return _ | Raise _ | Stop | Reperform _ ->
-    ()
-  | Branch cont | Poptrap (cont, _) ->
-    cont_deps blocks vars deps defs cont
+  | Return _ | Raise _ | Stop | Reperform _ -> ()
+  | Branch cont | Poptrap (cont, _) -> cont_deps blocks vars deps defs cont
   | Cond (_, cont1, cont2) ->
-    cont_deps blocks vars deps defs cont1;
-    cont_deps blocks vars deps defs cont2
+      cont_deps blocks vars deps defs cont1;
+      cont_deps blocks vars deps defs cont2
   | Switch (_, a1, a2) ->
-    Array.iter ~f:(fun cont -> cont_deps blocks vars deps defs cont) a1;
-    Array.iter ~f:(fun cont -> cont_deps blocks vars deps defs cont) a2
-  | Pushtrap (cont, _, _, _) ->
-    cont_deps blocks vars deps defs cont
+      Array.iter ~f:(fun cont -> cont_deps blocks vars deps defs cont) a1;
+      Array.iter ~f:(fun cont -> cont_deps blocks vars deps defs cont) a2
+  | Pushtrap (cont, _, _, _) -> cont_deps blocks vars deps defs cont
   | Resume (x, _, cont_opt) ->
-    add_var vars x;
-    add_effect_def defs x;
-    Option.iter ~f:(fun cont -> cont_deps blocks vars deps defs cont) cont_opt
+      add_var vars x;
+      add_effect_def defs x;
+      Option.iter ~f:(fun cont -> cont_deps blocks vars deps defs cont) cont_opt
   | Perform (x, _, cont) ->
-    add_var vars x;
-    add_effect_def defs x;
-    cont_deps blocks vars deps defs cont
+      add_var vars x;
+      add_effect_def defs x;
+      cont_deps blocks vars deps defs cont
   | LastApply (x, (f, args, b), cont_opt) ->
-    add_var vars x;
-    add_expr_def defs x (Apply (f, args, b));
-    expr_deps blocks vars deps defs x (Apply (f, args, b));
-    Option.iter ~f:(fun cont -> cont_deps blocks vars deps defs cont) cont_opt
+      add_var vars x;
+      add_expr_def defs x (Apply (f, args, b));
+      expr_deps blocks vars deps defs x (Apply (f, args, b));
+      Option.iter ~f:(fun cont -> cont_deps blocks vars deps defs cont) cont_opt
 
 let program_deps { blocks; _ } =
   let nv = Var.count () in
   let vars = Var.ISet.empty () in
   let deps = Array.make nv Var.Set.empty in
   let defs = Array.make nv undefined in
-  Addr.Map.iter
-    (fun _ block -> block_deps blocks vars deps defs block)
-    blocks;
+  Addr.Map.iter (fun _ block -> block_deps blocks vars deps defs block) blocks;
   vars, deps, defs
 
 let var_set_lift f s = Var.Set.fold (fun y s -> Var.Set.union (f y) s) s Var.Set.empty
@@ -278,13 +272,16 @@ let program_escape defs known_origins { blocks; _ } =
       | Return x | Raise (x, _) -> block_escape st x
       (* todo? *)
       | Resume (_, (x, y, z), _) ->
-      block_escape st x; block_escape st y; block_escape st z
-      | Perform (_, x, _) ->
-      block_escape st x
+          block_escape st x;
+          block_escape st y;
+          block_escape st z
+      | Perform (_, x, _) -> block_escape st x
       | Reperform (x, y) ->
-      block_escape st x; block_escape st y
+          block_escape st x;
+          block_escape st y
       | LastApply (x, (y, _, _), _) ->
-        block_escape st x; block_escape st y
+          block_escape st x;
+          block_escape st y
       | Stop | Branch _ | Cond _ | Switch _ | Pushtrap _ | Poptrap _ -> ())
     blocks;
   possibly_mutable
@@ -472,13 +469,13 @@ let f ?skip_param p =
   Code.invariant p;
   p, info
 
-  let f_block ?acc blocks block =
-    let vars, deps, defs =
-      match acc with
-      | None ->
+let f_block ?acc blocks block =
+  let vars, deps, defs =
+    match acc with
+    | None ->
         let nv = Var.count () in
-        (Var.ISet.empty (), Array.make nv Var.Set.empty, Array.make nv undefined)
-      | Some acc -> acc
-    in
-    block_deps blocks vars deps defs block;
-    vars, deps, defs
+        Var.ISet.empty (), Array.make nv Var.Set.empty, Array.make nv undefined
+    | Some acc -> acc
+  in
+  block_deps blocks vars deps defs block;
+  vars, deps, defs

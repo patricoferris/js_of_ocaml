@@ -364,8 +364,10 @@ let rec do_not_raise pc visited blocks =
             | Prim (_, _) -> ()));
     match b.branch with
     | Raise _ -> raise May_raise
-    | Stop | Return _ | Poptrap _ | Resume (_, _, None)
-    | LastApply (_, _, None) | Reperform _  -> visited
+    | Stop | Return _ | Poptrap _
+    | Resume (_, _, None)
+    | LastApply (_, _, None)
+    | Reperform _ -> visited
     | Resume (_, _, Some (pc, _)) -> do_not_raise pc visited blocks
     | Perform (_, _, (pc, _)) -> do_not_raise pc visited blocks
     | LastApply (_, _, Some (pc, _)) -> do_not_raise pc visited blocks

@@ -68,7 +68,7 @@ val update_def : info -> Code.Var.t -> Code.expr -> unit
 val f : ?skip_param:bool -> Code.program -> Code.program * info
 
 val f_block :
-  ?acc:(Code.Var.ISet.t * Code.Var.Set.t array * def array) ->
-  Code.block Code.Addr.Map.t ->
-  Code.block ->
-  Code.Var.ISet.t * Code.Var.Set.t array * def array
+     ?acc:Code.Var.ISet.t * Code.Var.Set.t array * def array
+  -> Code.block Code.Addr.Map.t
+  -> Code.block
+  -> Code.Var.ISet.t * Code.Var.Set.t array * def array

@@ -26,7 +26,6 @@ val f :
   -> ?profile:profile
   -> ?dynlink:bool
   -> ?linkall:bool
-  -> ?cps:bool
   -> ?source_map:string option * Source_map.t
   -> ?custom_header:string
   -> Pretty_print.t

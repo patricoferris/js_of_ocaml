@@ -498,7 +498,6 @@ let full
     ~linkall
     ~source_map
     ~custom_header
-    ~cps
     formatter
     d
     p =
@@ -507,7 +506,7 @@ let full
 
   let opt =
     configure formatter
-    +> (if cps then Effects.f else Fun.id)
+    +> Effects.f
     +> specialize_js_once
     +> profile
     +> Generate_closure.f
@@ -533,7 +532,6 @@ let f
     ?(profile = o1)
     ?(dynlink = false)
     ?(linkall = false)
-    ?(cps = false)
     ?source_map
     ?custom_header
     formatter
@@ -547,7 +545,6 @@ let f
     ~linkall
     ~source_map
     ~custom_header
-    ~cps
     formatter
     d
     p
@@ -559,7 +556,6 @@ let from_string prims s formatter =
     ~wrap_with_fun:`Anonymous
     ~profile:o1
     ~dynlink:false
-    ~cps:false
     ~linkall:false
     ~source_map:None
     ~custom_header:None
