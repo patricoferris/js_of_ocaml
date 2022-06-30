@@ -1,0 +1,18 @@
+(executables
+ (names effects no_effects)
+ (js_of_ocaml (flags (:standard --debug eff)))
+ (modes js))
+
+(rule
+ (target effects.referencejs)
+ (deps effects.bc.js)
+ (action
+  (with-stdout-to
+   %{target}
+   (run node ./effects.bc.js))))
+
+(rule
+ (alias runtest)
+ (deps effects.reference effects.referencejs)
+ (action
+  (diff effects.reference effects.referencejs)))

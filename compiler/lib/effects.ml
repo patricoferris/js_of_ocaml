@@ -174,17 +174,17 @@ let trywith_exit_nodes (blocks : block Addr.Map.t) (g : graph) dominated_by :
       let succs = Addr.Set.diff (Addr.Map.find node g.succs) visited in
       match (Addr.Map.find node blocks).branch with
       | Pushtrap ((_, _), _, (pc2, _), _) ->
-          if not @@ debug ()
+          (if not @@ debug ()
           then ()
-          else Printf.eprintf "%d ==> dominance frontier of %d\n" node pc2;
+          else Printf.eprintf "%d ==> dominance frontier of %d\n" node pc2);
           let frontier = dominance_frontier g dominated_by pc2 in
-          if not @@ debug ()
+          (if not @@ debug ()
           then ()
           else (
             Printf.eprintf "frontier:";
             Addr.Set.iter (fun node -> Printf.eprintf " %d" node) frontier;
             Printf.eprintf "\n");
-          assert (Addr.Set.cardinal frontier <= 1);
+          assert (Addr.Set.cardinal frontier <= 1));
           let entry_of_exit, exit_of_entry =
             if Addr.Set.is_empty frontier
             then entry_of_exit, Addr.Map.add node None exit_of_entry
@@ -490,9 +490,9 @@ let cps_branch st pc k kx kf cont =
   try
     let delim_by = Addr.Map.find pc st.delimited_by in
     if not (Addr.Set.mem caddr delim_by) then raise Not_found;
-    if not @@ debug ()
+    (if not @@ debug ()
     then ()
-    else Printf.eprintf "Translated a jump frow %d to %d into a return\n" pc caddr;
+    else Printf.eprintf "Translated a jump frow %d to %d into a return\n" pc caddr);
     let scope_defs, _ = Addr.Map.find caddr st.defs_of_exit_node in
     let l = List.filter (in_this_scope scope_defs) (snd cont) in
     assert (List.length l = 1);
@@ -501,12 +501,12 @@ let cps_branch st pc k kx kf cont =
   with Not_found -> (
     try
       let cname = Addr.Map.find caddr st.jc.closure_of_jump in
-      if not @@ debug ()
+      (if not @@ debug ()
       then ()
       else (
         Printf.eprintf "cps_branch: %d ~> call v%d params:" caddr (Var.idx cname);
         List.iter (fun v -> Printf.eprintf " v%d" (Var.idx v)) params;
-        Printf.eprintf "\n\n");
+        Printf.eprintf "\n\n"));
       let ret = Var.fresh () in
       [ Let (ret, Apply (cname, params, false)) ], Return ret
     with Not_found -> [], Branch (caddr, params))
@@ -633,14 +633,14 @@ let cps_last st (k : Var.t) (kx : Var.t) (kf : Var.t) (block_addr : Addr.t) (las
       let id_addr = add_block st (identity ()) in
       let id_k, v = fresh2 () in
 
-      if not @@ debug ()
+      (if not @@ debug ()
       then ()
-      else Printf.eprintf "=>>>>> handler addr: %d\n" (fst cont2);
+      else Printf.eprintf "=>>>>> handler addr: %d\n" (fst cont2));
       let handler, handler_closure =
         closure_of_cont st block_addr [ x ] id_k kx kf cont2
       in
 
-      if not @@ debug () then () else Printf.eprintf "<== %d\n" block_addr;
+      (if not @@ debug () then () else Printf.eprintf "<== %d\n" block_addr);
       match Addr.Map.find block_addr st.en.exit_of_entry with
       | None ->
           [ Let (id_k, Closure ([ v ], (id_addr, [ v ])))
@@ -658,14 +658,14 @@ let cps_last st (k : Var.t) (kx : Var.t) (kf : Var.t) (block_addr : Addr.t) (las
             if Addr.Set.mem cont_addr (Addr.Map.find block_addr st.delimited_by)
             then [], Return body_ret
             else (
-              if not @@ debug ()
+              (if not @@ debug ()
               then ()
-              else Printf.eprintf "<> find defs of exit node: %d\n" cont_addr;
+              else Printf.eprintf "<> find defs of exit node: %d\n" cont_addr);
               let scope_defs, entry_defs = Addr.Map.find cont_addr st.defs_of_exit_node in
               let l = List.filter (in_this_scope scope_defs) cont_block.params in
-              if not @@ debug ()
+              (if not @@ debug ()
               then ()
-              else Printf.eprintf "length: %d\n" (List.length l);
+              else Printf.eprintf "length: %d\n" (List.length l));
               assert (List.length l = 1);
               let interesting_param = List.hd l in
               let interesting_arg = Var.fresh () in
@@ -799,15 +799,15 @@ let nop { start; blocks; free_pc } =
   let dom_by = dominated_by_node g in
   print_graph blocks g;
 
-  if not @@ debug () then () else Printf.eprintf "\nidom:\n";
+  (if not @@ debug () then () else Printf.eprintf "\nidom:\n");
 
   let idom = immediate_dominator_of_node g dom_by in
-  if not @@ debug ()
+  (if not @@ debug ()
   then ()
   else (
     Addr.Map.iter (fun node dom -> Printf.eprintf "%d -> %d\n" node dom) idom;
 
-    Printf.eprintf "\n");
+    Printf.eprintf "\n"));
 
   let blocks = Addr.Map.map nop_block blocks in
   { start; blocks; free_pc }
@@ -826,11 +826,11 @@ let f ({ start; blocks; free_pc } : Code.program) : Code.program =
     Code.fold_closures
       { start; blocks; free_pc }
       (fun _ _ (start, _) (jc, en, db, does) ->
-        if not @@ debug () then () else Printf.eprintf ">> Start: %d\n\n" start;
+        (if not @@ debug () then () else Printf.eprintf ">> Start: %d\n\n" start);
         let cfg = build_graph blocks start in
         let dom_by = dominated_by_node cfg in
 
-        if not @@ debug ()
+        (if not @@ debug ()
         then ()
         else (
           Printf.eprintf "dominated_by: \n";
@@ -842,17 +842,17 @@ let f ({ start; blocks; free_pc } : Code.program) : Code.program =
             dom_by;
           Printf.eprintf "\n";
           print_graph blocks cfg;
-          Printf.eprintf "%!");
+          Printf.eprintf "%!"));
 
         let closure_jc = jump_closures cfg dom_by in
         let closure_en = trywith_exit_nodes blocks cfg dom_by in
         let closure_db = delimited_by blocks cfg closure_en in
         let closure_does = defs_of_exit_scope blocks cfg closure_en in
 
-        if not @@ debug ()
+        (if not @@ debug ()
         then ()
         else (
-          Printf.eprintf "\nidom:\n";
+          Printf.eprintf "\nidom:\n");
 
           let idom = immediate_dominator_of_node cfg dom_by in
           Addr.Map.iter (fun node dom -> Printf.eprintf "%d -> %d\n" node dom) idom;
@@ -941,12 +941,12 @@ let f ({ start; blocks; free_pc } : Code.program) : Code.program =
   in
   let blocks = cps_blocks st in
 
-  if not @@ debug ()
+  (if not @@ debug ()
   then ()
   else (
     Printf.eprintf "Cont closures:";
     Var.Set.iter (fun c -> Printf.eprintf " v%d" (Var.idx c)) !cont_closures;
-    Printf.eprintf "\n\n%!");
+    Printf.eprintf "\n\n%!"));
 
   let k, kx, kf = fresh3 () in
   let v1, v2, v3, v4 = fresh4 () in
