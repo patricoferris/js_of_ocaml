@@ -67,9 +67,9 @@ let build_graph (blocks : block Addr.Map.t) (pc : Addr.t) : graph =
   g
 
 let print_graph blocks (g : graph) =
-  if not @@ debug ()
+  if (not @@ debug ())
   then ()
-  else
+  else begin
     let is_handler_succ v v' =
       match (Addr.Map.find v blocks).handler with
       | None -> false
@@ -100,6 +100,7 @@ let print_graph blocks (g : graph) =
     (*   ) s *)
     (* ) g.preds; *)
     Printf.eprintf "}\n"
+      end
 
 let dominated_by_node (g : graph) : Addr.Set.t Addr.Map.t =
   let explore_avoiding v =
@@ -848,79 +849,6 @@ let f ({ start; blocks; free_pc } : Code.program) : Code.program =
         let closure_en = trywith_exit_nodes blocks cfg dom_by in
         let closure_db = delimited_by blocks cfg closure_en in
         let closure_does = defs_of_exit_scope blocks cfg closure_en in
-
-        (if not @@ debug ()
-        then ()
-        else (
-          Printf.eprintf "\nidom:\n");
-
-          let idom = immediate_dominator_of_node cfg dom_by in
-          Addr.Map.iter (fun node dom -> Printf.eprintf "%d -> %d\n" node dom) idom;
-
-          Printf.eprintf "\nClosure of alloc site:\n";
-          Addr.Map.iter
-            (fun block to_allocate ->
-              List.iter
-                (fun (cname, caddr) ->
-                  Printf.eprintf "%d -> v%d, %d\n" block (Var.idx cname) caddr)
-                to_allocate)
-            closure_jc.closure_of_alloc_site;
-
-          Printf.eprintf "\nClosure of jump:\n";
-          Addr.Map.iter
-            (fun block cname -> Printf.eprintf "%d -> v%d\n" block (Var.idx cname))
-            closure_jc.closure_of_jump;
-          Printf.eprintf "\n";
-
-          Printf.eprintf "\nExit node of entry node:\n";
-          Addr.Map.iter
-            (fun entry exit ->
-              Printf.eprintf "%d -> " entry;
-              (match exit with
-              | None -> Printf.eprintf "None"
-              | Some n -> Printf.eprintf "%d" n);
-              Printf.eprintf "\n")
-            closure_en.exit_of_entry;
-
-          Printf.eprintf "\nEntry node of exit node:\n";
-          Addr.Map.iter
-            (fun exit entries ->
-              Printf.eprintf "%d ->" exit;
-              Addr.Set.iter (fun e -> Printf.eprintf " %d" e) entries;
-              Printf.eprintf "\n%!")
-            closure_en.entry_of_exit;
-
-          Printf.eprintf "\nDelimited by:\n";
-          Addr.Map.iter
-            (fun addr delim ->
-              Printf.eprintf "%d ->" addr;
-              Addr.Set.iter (fun e -> Printf.eprintf " %d" e) delim;
-              Printf.eprintf "\n%!")
-            closure_db;
-
-          Printf.eprintf "\nDefs of exit scope:\n";
-          Addr.Map.iter
-            (fun exit (defs, entry_defs) ->
-              Printf.eprintf "- Exit %d:\n" exit;
-              Printf.eprintf "+ defs:\n";
-              Array.iteri
-                (fun i d ->
-                  Printf.eprintf "%d ->" i;
-                  (match d with
-                  | Flow.Phi s ->
-                      Var.Set.iter (fun v -> Printf.eprintf " v%d" (Var.idx v)) s
-                  | Flow.Expr _ -> Printf.eprintf " Expr"
-                  | Flow.Param -> Printf.eprintf " Param"
-                  | Flow.FromOtherStack -> Printf.eprintf " FromOtherStack");
-                  Printf.eprintf "\n")
-                defs;
-
-              Printf.eprintf "+ Entry defs:\n";
-              Var.Map.iter
-                (fun k v -> Printf.eprintf "v%d -> v%d\n" (Var.idx k) (Var.idx v))
-                entry_defs;
-              Printf.eprintf "\n")
-            closure_does);
 
         ( merge_jump_closures closure_jc jc
         , merge_exit_nodes closure_en en
