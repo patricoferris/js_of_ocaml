@@ -585,10 +585,20 @@ let preprocess_literal_object mappper fields :
         let body = format_meth (mappper body) in
         let rec create_meth_ty exp =
           match exp.pexp_desc with
-          | Pexp_fun (label, _, _, body) -> Arg.make ~label () :: create_meth_ty body
+          | Pexp_function (params, _, Pfunction_body body) ->
+              let args =
+                List.filter_map
+                  ~f:(fun (p : function_param) ->
+                    match p.pparam_desc with
+                    | Pparam_val (label, _expression, _pattern) ->
+                        Some (Arg.make ~label ())
+                    | Pparam_newtype _ -> None)
+                  params
+              in
+              args :: create_meth_ty body
           | _ -> []
         in
-        let fun_ty = create_meth_ty body in
+        let fun_ty = create_meth_ty body |> List.concat in
         names, Meth (id, priv, bang, body, fun_ty) :: fields
     | _ ->
         raise_errorf
