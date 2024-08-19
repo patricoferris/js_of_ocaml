@@ -209,9 +209,9 @@ class map =
     method expression_desc : expression_desc -> expression_desc =
       fun x ->
         match x with
-        | Pexp_function a ->
-            let a = self#cases a in
-            Pexp_function a
+        | Pexp_function (params, ty, Pfunction_cases (cases, loc, attr)) ->
+            let new_cases = self#cases cases in
+            Pexp_function (params, ty, Pfunction_cases (new_cases, loc, attr))
         | Pexp_match (a, b) ->
             let a = self#expression a in
             let b = self#cases b in
